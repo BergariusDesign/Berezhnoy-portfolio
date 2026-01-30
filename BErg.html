@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Motion Portfolio</title>
+    <style>
+        /* --- НАСТРОЙКИ СТИЛЯ (CSS) --- */
+        :root {
+            --bg-deep: #050507; /* Глубокий космос */
+            --glass-bg: rgba(255, 255, 255, 0.03); /* Полупрозрачность для карт */
+            --glass-border: rgba(255, 255, 255, 0.08); /* Тонкая рамка */
+            --accent-glow: #00f0ff; /* Неоновый циан */
+            --text-main: #ffffff;
+            --text-muted: #8b9bb4;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* Канвас для частиц (ФОН) */
+        #neural-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1; /* Убираем назад */
+            background: radial-gradient(circle at center, #0b1023 0%, #000000 100%);
+        }
+
+        /* Контейнер сайта */
+        .wrapper {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* HEADER */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 80px;
+        }
+        .logo {
+            font-weight: 700;
+            font-size: 24px;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #fff, var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            cursor: pointer;
+        }
+        .status-dot {
+            height: 8px; width: 8px;
+            background-color: var(--accent-glow);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 12px var(--accent-glow);
+            margin-right: 8px;
+        }
+        .status-text { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+
+        /* HERO & GRID (Главная страница) */
+        #main-view {
+            display: block;
+            animation: fadeIn 0.8s ease forwards;
+        }
+
+        .hero {
+            margin-bottom: 120px;
+            position: relative;
+        }
+        h1 {
+            font-size: clamp(48px, 9vw, 130px);
+            line-height: 0.95;
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            background: linear-gradient(180deg, #ffffff 0%, #666 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            font-size: 18px;
+            color: var(--text-muted);
+            max-width: 480px;
+            margin-top: 30px;
+            line-height: 1.6;
+            border-left: 2px solid var(--accent-glow);
+            padding-left: 20px;
+        }
+
+        /* BENTO GRID (Сетка) */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            grid-auto-rows: minmax(300px, auto);
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            overflow: hidden;
+            position: relative;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.3s;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-5px) scale(1.01);
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .card video {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            opacity: 0.6;
+            transition: opacity 0.5s ease;
+            mix-blend-mode: screen;
+            pointer-events: none; /* Чтобы клик проходил сквозь видео */
+        }
+        .card:hover video { opacity: 1; mix-blend-mode: normal; }
+
+        .card-content {
+            position: relative;
+            z-index: 2;
+            padding: 30px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+        }
+        .card-title { font-size: 24px; margin: 0 0 5px 0; color: #fff; pointer-events: none;}
+        .card-tag {
+            font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--accent-glow); border: 1px solid rgba(0, 240, 255, 0.3);
+            padding: 4px 10px; border-radius: 20px; display: inline-block;
+            pointer-events: none;
+        }
+
+        .col-8 { grid-column: span 8; height: 500px; }
+        .col-4 { grid-column: span 4; height: 500px; }
+        .col-6 { grid-column: span 6; height: 350px; }
+
+        @media (max-width: 1024px) {
+            .col-8, .col-4, .col-6 { grid-column: span 12; height: 400px; }
+            h1 { font-size: 60px; }
+        }
+
+        /* --- PROJECT DETAIL VIEW (Страница проекта) --- */
+        #project-view {
+            display: none;
+            opacity: 0;
+            padding-top: 20px;
+        }
+        
+        .back-btn {
+            background: none; border: 1px solid var(--glass-border);
+            color: var(--text-muted); padding: 10px 20px; border-radius: 30px;
+            cursor: pointer; transition: 0.3s; margin-bottom: 40px;
+            display: inline-flex; align-items: center; gap: 10px;
+            font-size: 14px;
+        }
+        .back-btn:hover { border-color: var(--accent-glow); color: #fff; background: rgba(255,255,255,0.05);}
+
+        .project-header h2 { font-size: clamp(32px, 5vw, 60px); margin: 0 0 20px 0; }
+        .project-meta { display: flex; gap: 20px; margin-bottom: 60px; color: var(--text-muted); }
+        
+        /* Видео в режиме просмотра */
+        .main-project-video {
+            width: 100%;
+            border-radius: 24px;
+            border: 1px solid var(--glass-border);
+            margin-bottom: 80px;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            background: #000;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        .process-section {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 60px;
+            margin-bottom: 100px;
+        }
+        .process-text h3 { font-size: 32px; color: var(--accent-glow); margin-bottom: 20px; }
+        .process-text p { color: var(--text-muted); line-height: 1.8; margin-bottom: 20px; }
+        
+        .process-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .process-img {
+            width: 100%; height: 200px; background: #222; border-radius: 12px;
+            object-fit: cover; opacity: 0.8; border: 1px solid var(--glass-border);
+        }
+        
+        @media (max-width: 768px) {
+            .process-section { grid-template-columns: 1fr; }
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        footer {
+            margin-top: 100px; border-top: 1px solid var(--glass-border);
+            padding-top: 40px; color: var(--text-muted);
+            font-size: 14px; display: flex; justify-content: space-between;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="neural-canvas"></canvas>
+
+    <div class="wrapper">
+        
+        <header>
+            <div class="logo" onclick="showMain()">NAME.DESIGN</div>
+            <div>
+                <span class="status-dot"></span>
+                <span class="status-text">Open to create</span>
+            </div>
+        </header>
+
+        <div id="main-view">
+            <section class="hero">
+                <h1>DIGITAL<br>ALCHEMY</h1>
+                <p>
+                    Соединяю искусство моушн-дизайна с генеративными нейросетями. 
+                    Создаю визуальные миры, где технология обретает душу.
+                </p>
+            </section>
+
+            <div class="grid">
+                <div class="card col-8" onclick="openProject('magic')">
+                    <video autoplay loop muted playsinline>
+                        <source src="Промо.mp4" type="video/mp4">
+                    </video>
+                    <div class="card-content">
+                        <span class="card-tag">Commercial AI</span>
+                        <h3 class="card-title">Magic Moments</h3>
+                    </div>
+                </div>
+
+                <div class="card col-4" onclick="openProject('app')">
+                    <video autoplay loop muted playsinline>
+                        <source src="Pre-comp 1_1.mp4" type="video/mp4">
+                    </video>
+                    <div class="card-content">
+                        <span class="card-tag">UI / UX Motion</span>
+                        <h3 class="card-title">App Interface</h3>
+                    </div>
+                </div>
+
+                <div class="card col-6" onclick="openProject('reel')">
+                    <div style="width:100%; height:100%; position: absolute; background: linear-gradient(135deg, #1a1a2e, #16213e);"></div>
+                    <div class="card-content">
+                        <span class="card-tag">Portfolio</span>
+                        <h3 class="card-title">Showreel 2026</h3>
+                    </div>
+                </div>
+
+                <div class="card col-6" onclick="openProject('neural')">
+                    <div style="width:100%; height:100%; position: absolute; background: linear-gradient(135deg, #0f0c29, #302b63);"></div>
+                    <div class="card-content">
+                        <span class="card-tag">Generative Art</span>
+                        <h3 class="card-title">Neural Experiments</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="project-view">
+            <button class="back-btn" onclick="showMain()">
+                ← Вернуться назад
+            </button>
+
+            <div class="project-header">
+                <h2 id="p-title">Project Name</h2>
+                <div class="project-meta">
+                    <span id="p-tag">CATEGORY</span>
+                    <span>•</span>
+                    <span>2026</span>
+                </div>
+            </div>
+
+            <video id="p-video" class="main-project-video" controls playsinline></video>
+
+            <div class="process-section">
+                <div class="process-text">
+                    <h3>Процесс создания</h3>
+                    <p id="p-desc">
+                        Здесь будет описание задачи. Как мы пришли к этому визуальному решению. 
+                    </p>
+                    <p>
+                        Этапы работы:
+                        <br>1. Референсы и мудборд
+                        <br>2. Генерация ассетов
+                        <br>3. Анимация и композитинг
+                    </p>
+                </div>
+                <div class="process-gallery">
+                    <div class="process-img" style="background: linear-gradient(45deg, #333, #444);"></div>
+                    <div class="process-img" style="background: linear-gradient(45deg, #222, #333);"></div>
+                    <div class="process-img" style="background: linear-gradient(45deg, #1a1a1a, #2a2a2a);"></div>
+                    <div class="process-img" style="background: linear-gradient(45deg, #444, #555);"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <span>© 2026 Motion Design Portfolio</span>
+            <span>Made with AI & Code</span>
+        </footer>
+
+    </div>
+
+    <script>
+        // --- ДАННЫЕ ПРОЕКТОВ ---
+        const projectsData = {
+            'magic': {
+                title: 'Magic Moments',
+                tag: 'Commercial AI',
+                videoSrc: 'Промо.mp4',
+                description: 'Для этого проекта мы использовали комбинацию Cinema 4D для базовой геометрии и AI-фильтры для создания эффекта магии. Главной задачей было передать ощущение чуда через экран.'
+            },
+            'app': {
+                title: 'App Interface',
+                tag: 'UI / UX Motion',
+                videoSrc: 'Pre-comp 1_1.mp4',
+                description: 'Анимация интерфейса должна быть плавной и отзывчивой. Мы разобрали UX-флоу на составляющие и добавили микровзаимодействия.'
+            },
+            'reel': {
+                title: 'Showreel 2026',
+                tag: 'Portfolio',
+                videoSrc: '', // Вставьте ссылку на шоурил
+                description: 'Сборка лучших работ за последний год. Монтаж выполнен в ритм с динамичным саунд-дизайном.'
+            },
+            'neural': {
+                title: 'Neural Experiments',
+                tag: 'Generative Art',
+                videoSrc: '',
+                description: 'Чистое творчество. Исследование латентного пространства нейросетей и процедурной генерации.'
+            }
+        };
+
+        const mainView = document.getElementById('main-view');
+        const projectView = document.getElementById('project-view');
+        const pVideo = document.getElementById('p-video');
+
+        // Открытие проекта
+        function openProject(id) {
+            const data = projectsData[id];
+            
+            // Заполнение текстов
+            document.getElementById('p-title').innerText = data.title;
+            document.getElementById('p-tag').innerText = data.tag;
+            document.getElementById('p-desc').innerText = data.description;
+            
+            if(data.videoSrc) {
+                pVideo.src = data.videoSrc;
+                pVideo.style.display = 'block';
+                
+                // --- НАСТРОЙКИ ЗВУКА ---
+                pVideo.muted = false; // Отключаем беззвучный режим
+                pVideo.volume = 0.4;  // 40% громкости (чтобы не пугать пользователя)
+                
+                // Пробуем запустить видео
+                const playPromise = pVideo.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log("Автоплей заблокирован, пользователь должен нажать Play");
+                    });
+                }
+            } else {
+                pVideo.style.display = 'none';
+                pVideo.pause(); 
+            }
+
+            // Переключение экранов
+            mainView.style.display = 'none';
+            projectView.style.display = 'block';
+            
+            setTimeout(() => {
+                projectView.style.opacity = '1';
+                projectView.style.animation = 'fadeIn 0.5s ease forwards';
+            }, 10);
+            
+            window.scrollTo(0,0);
+        }
+
+        // Возврат на главную
+        function showMain() {
+            // --- ОСТАНАВЛИВАЕМ ЗВУК ПРИ ВЫХОДЕ ---
+            pVideo.pause();
+            pVideo.currentTime = 0;
+
+            projectView.style.opacity = '0';
+            setTimeout(() => {
+                projectView.style.display = 'none';
+                mainView.style.display = 'block';
+            }, 300);
+        }
+
+        // --- КОД ЧАСТИЦ (ФОН) ---
+        const canvas = document.getElementById('neural-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        let particles = [];
+        
+        const properties = {
+            particleColor: 'rgba(255, 255, 255, 0.5)',
+            lineColor: 'rgba(0, 240, 255,',
+            particleCount: 70,
+            connectionDistance: 150,
+            mouseDistance: 200
+        };
+
+        let mouse = { x: null, y: null };
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2 + 1;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = properties.particleColor;
+                ctx.fill();
+            }
+        }
+
+        function init() {
+            particles = [];
+            for (let i = 0; i < properties.particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                for (let j = i; j < particles.length; j++) {
+                    let dx = particles[i].x - particles[j].x;
+                    let dy = particles[i].y - particles[j].y;
+                    let distance = Math.sqrt(dx*dx + dy*dy);
+
+                    if (distance < properties.connectionDistance) {
+                        let opacity = 1 - (distance / properties.connectionDistance);
+                        ctx.strokeStyle = properties.lineColor + opacity + ')';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        init();
+        animate();
+    </script>
+
+</body>
+</html>
